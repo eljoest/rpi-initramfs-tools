@@ -1,9 +1,11 @@
-#!/bin/sh -e
+#!/bin/bash -e
 
 version="$1"
-bootopt=""
+stage_dir=/var/lib/rpi-initramfs
+bootopt="-b $stage_dir"
 
 command -v update-initramfs >/dev/null 2>&1 || exit 0
+[[ -d "$stage_dir" ]] || mkdir "$stage_dir"
 
 # passing the kernel version is required
 if [ -z "${version}" ]; then
@@ -12,15 +14,16 @@ if [ -z "${version}" ]; then
 fi
 
 # exit if kernel does not need an initramfs
-if [ "$INITRD" = 'No' ]; then
+if [ -z "$RPI_INITRD" -o "$RPI_INITRD" = 'No' ]; then
 	exit 0
 fi
 
-# absolute file name of kernel image may be passed as a second argument;
-# create the initrd in the same directory
-if [ -n "$2" ]; then
-	bootdir=$(dirname "$2")
-	bootopt="-b ${bootdir}"
+# the absolute filename of the kernel is expected to
+# look like /boot/kernel7.img
+dest_name="${2/kernel/initrd}"
+if [ "$dest_name" = "$2" ]; then
+	echo >&2 "E: rpi-initramfs-tools: ${DPKG_MAINTSCRIPT_PACKAGE:-kernel package} did not pass a recognized kernel file name"
+	exit 2
 fi
 
 # avoid running multiple times
@@ -31,6 +34,21 @@ if [ -n "$DEB_MAINT_PARAMS" ]; then
 	fi
 fi
 
+if [[ "${RPI_INITRD_ALL}" != "Yes" ]]; then
+  current_kernel="$(uname -r)"
+  current_arch="$(expr "$current_kernel" : '[0-9\.]*\(.*\)')" || {
+    echo >&2 "W: failed to determine current architecture"; exit 0; }
+  new_arch="$(expr "$version" : '[0-9\.]*\(.*\)')" || {
+    echo >&2 "W: failed to determine kernel architecture"; exit 0; }
+  if [[ "$new_arch" != "$current_arch" ]]; then
+    echo "Skipping initrd generation due to architecture mismatch (${new_arch} != ${current_arch})"
+    exit 0
+  fi
+fi
+
 # we're good - create initramfs.  update runs do_bootloader
 # shellcheck disable=SC2086
 INITRAMFS_TOOLS_KERNEL_HOOK=1 update-initramfs -c -k "${version}" ${bootopt} >&2
+
+# only one kernel version is kept in /boot, copy initrd
+cp -av "${stage_dir}/initrd.img-${version}" "$dest_name"
