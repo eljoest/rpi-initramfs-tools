@@ -60,3 +60,8 @@ The initrd will use this name and replace "kernel" with "initrd"
 
 The initrd files will be kept in ```/var/lib/rpi-initramfs``` with only the most recent
 one being copied to ```/boot``` similar to the behavior of ```raspberrypi-kernel```.
+
+If the kernel gets updated without calling the hook scripts, your system may not be able
+to boot anymore. This seems to happen with rpi-update unless
+[Hexxeh/rpi-firmware#252](https://github.com/Hexxeh/rpi-update/issues/252)
+gets implemented.
